@@ -84,6 +84,7 @@ px4_add_board(
 		vmount
 		vtol_att_control
 		airspeed_selector
+		iq
 
 	SYSTEMCMDS
 		bl_update
@@ -123,6 +124,7 @@ px4_add_board(
 		px4_mavlink_debug # Tutorial code from http://dev.px4.io/en/debug/debug_values.html
 		test
 		rover_steering_control # Rover example app
+		#iqinetics
 		uuv_example_app
 
 	)

@@ -140,6 +140,7 @@ px4_add_romfs_files(
 	14002_tri_y_yaw-
 
 	15001_coax_heli
+	15002_coax_swashplateless
 
 	16001_helicopter
 	
