@@ -85,7 +85,10 @@
         "githubPullRequests.telemetry.enabled": false,
         "gitlens.advanced.telemetry.enabled": false,
         "files.associations": {
-                "*.jinja": "jinja"
+                "*.jinja": "jinja",
+                "*.ipp": "cpp",
+                "bitset": "cpp",
+                "cmath": "cpp"
         },
         "search.exclude": {
                 "build/**": true

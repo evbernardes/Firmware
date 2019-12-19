@@ -52,3 +52,6 @@ set MIXER_AUX pass
 # use PWM parameters for throttle channel
 set PWM_AUX_OUT 1234
 set PWM_OUT 34
+
+# start iqinetics speed modules
+iq start /dev/ttyS1

@@ -60,6 +60,9 @@
 #include "system_control_client.hpp"
 #include "propeller_motor_control_client.hpp"
 
+#define MODE_FLIGHT 0
+#define MODE_ROLL 1
+
 extern "C" __EXPORT int iq_main(int argc, char *argv[]);
 static volatile bool thread_should_exit = false;   /**< Daemon exit flag */
 static volatile bool thread_running = false;   /**< Daemon status flag */
@@ -71,8 +74,18 @@ int setup_uart(char *uart_name, int &serial_fd);
 
 // declade global serial_fds and serial interface
 // this way they can be used outside of the main thread
-int serial_fds;
-GenericInterface com;
+// int serial_fds;
+// GenericInterface com;
+
+// PropellerMotorControlClient pmc1(0);
+// PropellerMotorControlClient pmc2(1);
+// VoltageSuperPositionClient  vsc1(0);
+// VoltageSuperPositionClient  vsc2(1);
+// SystemControlClient sys(0);
+// PX4_INFO("Clients created");
+bool is_armed = false;
+bool was_armed = false;
+short int mode = MODE_FLIGHT;
 
 /**
  * Print the correct usage.
@@ -115,24 +128,67 @@ int iq_main(int argc, char *argv[])
     return 0;
   }
 
+  if (!strcmp(argv[1], "switch")) {
+    if (argc < 3) {
+      PX4_INFO("usage: iq switch {flight|roll}\n");
+      return -1;
+
+    } else if (!thread_running) {
+      PX4_INFO("Thread not running\n");
+      return -1;
+
+    } else if (!strcmp(argv[2], "flight")) {
+      if (mode == MODE_FLIGHT) {
+        PX4_INFO("already in flight mode\n");
+        return 0;
+      } else {
+        PX4_INFO("entering flight mode\n");
+        mode = MODE_FLIGHT;
+        return 0;
+      }
+
+    } else if (!strcmp(argv[2], "roll")) {
+      if (mode == MODE_ROLL) {
+        PX4_INFO("already in roll mode\n");
+        return 0;
+      } else {
+        PX4_INFO("entering roll mode\n");
+        mode = MODE_ROLL;
+        return 0;
+      }
+    }
+
+    else {
+      PX4_INFO("usage: iq switch [flight:roll]\n");
+      return -1;
+    }
+  }
+
   if (!strcmp(argv[1], "stop")) {
+    if(is_armed)
+    {
+      PX4_ERR("cannot stop while armed");
+      return -1;
+    }
+
+    // // put motors in coast mode
+    // pmc1.ctrl_coast_.set(com);
+    // pmc2.ctrl_coast_.set(com);
+
+    // int send_ret = send_msgs_to_uart(com, serial_fds);
+    // if(send_ret != 0)
+    //   PX4_WARN("serial1 send error %d on fds %d", send_ret, serial_fds);
     PX4_INFO("stopping");
     thread_should_exit = true;
-    // GenericInterface com;
-    // PX4_INFO("GenericInterface created");
-    //creates clients
-    // SystemControlClient sys(0);
-    // sys.reboot_program_.set(com);
-    // send_msgs_to_uart(com, serial_fds);
-    // usleep(30000);
-    // PX4_INFO("Stop, fd %d", serial_fds);
-
     return 0;
   }
 
   if (!strcmp(argv[1], "status")) {
     if (thread_running) {
-      PX4_INFO("running");
+      if(mode == MODE_FLIGHT)
+        PX4_INFO("running in flight mode");
+      else if(mode == MODE_ROLL)
+        PX4_INFO("running roll mode");
 
     } else {
       PX4_INFO("stopped");
@@ -149,14 +205,6 @@ int iq_thread_main(int argc, char *argv[])
 {
 	PX4_INFO("IQinetics Underactuated Propeller Thread Loading");
 
-	// // Check input arguments
-	// if (argc < 1) {
-	//   PX4_ERR("need serial port name as argument");
-	//   return 1;
-  // }
-	// // Start UART
-  // char *uart_name1 = argv[1];
-
   // Check input arguments
   char *uart_name1;
 	if (argc < 2) {
@@ -170,7 +218,7 @@ int iq_thread_main(int argc, char *argv[])
     uart_name1 = argv[1];
   }
 
-  serial_fds = -1;
+  int serial_fds = -1;
 
   if(setup_uart(uart_name1, serial_fds) == 0)
     PX4_INFO("Opened %s with fd %d", uart_name1, serial_fds);
@@ -215,16 +263,15 @@ int iq_thread_main(int argc, char *argv[])
 
   PX4_INFO("PARAMS Loaded");
 
-	// Make a communication interface object
-  // GenericInterface com;
-  // PX4_INFO("GenericInterface created");
+  GenericInterface com;
+
   PropellerMotorControlClient pmc1(0);
   PropellerMotorControlClient pmc2(1);
   VoltageSuperPositionClient  vsc1(0);
   VoltageSuperPositionClient  vsc2(1);
   SystemControlClient sys(0);
-
   PX4_INFO("Clients created");
+
   pmc1.timeout_.set(com,0.002);
   pmc2.timeout_.set(com,0.002);
   sys.reboot_program_.set(com);
@@ -253,7 +300,8 @@ int iq_thread_main(int argc, char *argv[])
   float amplitude = 0, phase = 0;
   // int yaw_max = 100;
   thread_running = true;
-	bool is_armed = false;
+	// bool is_armed = false;
+	// bool was_armed = false;
 
 	// main while loop for this thread
 	while(!thread_should_exit)
@@ -268,9 +316,9 @@ int iq_thread_main(int argc, char *argv[])
 
     // int send_ret = send_msgs_to_uart(com, serial_fds);
     // if(send_ret != 0)
-    //     PX4_WARN("serial1 send error %d", send_ret);
+        // PX4_WARN("serial1 send error %d", send_ret);
 		/* wait for sensor update of 2 file descriptors for 10 ms (100hz) */
-		int poll_ret = px4_poll(fds, 1, 10);
+		int poll_ret = px4_poll(fds, 2, 10);
 
 		// /* handle the poll result */
 		if (poll_ret == 0) {
@@ -288,26 +336,23 @@ int iq_thread_main(int argc, char *argv[])
 			error_counter++;
 		}
 		else
-    // if (true)com
 		{
-		  if (fds[0].revents & POLLIN)
+		  if (fds[1].revents & POLLIN)
 		  {
 		    // Get the actuator armed data
         struct actuator_armed_s actuator_arm_raw;
         orb_copy(ORB_ID(actuator_armed), actuator_arm_sub_fd, &actuator_arm_raw);
 
-        // Remember armed state
         is_armed = actuator_arm_raw.armed;
-		  }
-			if (is_armed && (fds[0].revents & POLLIN))
-      // if (true)
-			// if ((fds[0].revents & POLLIN))
-			{
-				// Get the actuator control data
-				struct actuator_controls_s actuator_raw;
-				orb_copy(ORB_ID(actuator_controls_0), actuator_ctrl_sub_fd, &actuator_raw);
-				// --------------------------------------------------------------------
-				// Vehicle behavior goes here
+      }
+
+      if (is_armed && (fds[0].revents & POLLIN))
+      {
+        // Get the actuator control data
+        struct actuator_controls_s actuator_raw;
+        orb_copy(ORB_ID(actuator_controls_0), actuator_ctrl_sub_fd, &actuator_raw);
+        // --------------------------------------------------------------------
+        // Vehicle behavior goes here
         velocity  = actuator_raw.control[3]*max_speed_value;
         x_roll    = actuator_raw.control[0]*max_pulse_volts_value;
         y_pitch   = actuator_raw.control[1]*max_pulse_volts_value;
@@ -316,22 +361,45 @@ int iq_thread_main(int argc, char *argv[])
         phase = atan2(x_roll,y_pitch);
 
         // PX4_INFO("velocity = %f | x roll = %f | y pitch = %f | y z_yaw = %f | amplitude %f | phase %f",(double)velocity, (double)x_roll, (double)y_pitch, (double)z_yaw, (double)amplitude, (double)phase*57.29);
+        if (mode == MODE_FLIGHT) {
+          pmc1.ctrl_velocity_.set(com,velocity - z_yaw); // INDEX_THROTTLE = 3, INDEX_YAW = 2
+          vsc1.phase_.set(com,phase);
+          vsc1.amplitude_.set(com,amplitude);
 
-        pmc1.ctrl_velocity_.set(com,velocity - z_yaw); // INDEX_THROTTLE = 3, INDEX_YAW = 2
-        vsc1.phase_.set(com,phase);
-        vsc1.amplitude_.set(com,amplitude);
+          pmc2.ctrl_velocity_.set(com,velocity + z_yaw); // INDEX_THROTTLE = 3, INDEX_YAW = 2
+          vsc2.phase_.set(com,phase);
+          vsc2.amplitude_.set(com,amplitude);
 
-        pmc2.ctrl_velocity_.set(com,velocity + z_yaw); // INDEX_THROTTLE = 3, INDEX_YAW = 2
-        vsc2.phase_.set(com,phase);
-        vsc2.amplitude_.set(com,amplitude);
+        } else if (mode == MODE_ROLL) {
+          pmc1.ctrl_velocity_.set(com,velocity);
+          vsc1.phase_.set(com,0);
+          vsc1.amplitude_.set(com,0);
+
+          pmc2.ctrl_velocity_.set(com,-velocity);
+          vsc2.phase_.set(com,0);
+          vsc2.amplitude_.set(com,0);
+        }
 
         int send_ret = send_msgs_to_uart(com, serial_fds);
         if(send_ret != 0)
-            PX4_WARN("serial1 send error %d", send_ret);
+          PX4_WARN("serial1 send error %d", send_ret);
+      }
 
-            // End vehicle behavior
-        // --------------------------------------------------------------------
-			}
+      if(was_armed && !is_armed)
+      {
+
+        // put motors in coast mode
+        pmc1.ctrl_coast_.set(com);
+        pmc2.ctrl_coast_.set(com);
+        PX4_INFO("System disarmed, motors put in coast mode");
+
+        int send_ret = send_msgs_to_uart(com, serial_fds);
+        if(send_ret != 0)
+          PX4_WARN("serial1 send error %d", send_ret);
+      }
+
+      was_armed = is_armed;
+
 		}
 	}
 	PX4_INFO("exiting");
@@ -444,5 +512,5 @@ usage(const char *reason)
 		fprintf(stderr, "%s\n", reason);
 	}
 
-	fprintf(stderr, "usage: iq {start|stop|status}\n\n");
+	fprintf(stderr, "usage: iq {start|stop|status|switch}\n\n");
 }
