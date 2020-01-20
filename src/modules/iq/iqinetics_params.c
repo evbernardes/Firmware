@@ -48,4 +48,23 @@ PARAM_DEFINE_FLOAT(PROP_MAX_SPEED, 400.0f);
  * @reboot_required true
  * @group IQinetics
  */
-PARAM_DEFINE_FLOAT(PROP_MAX_YAW, 100.0f);
+PARAM_DEFINE_FLOAT(PROP_MAX_YAW, 500.0f);
+
+
+/**
+ * Roll minimum velocity
+ *
+ * The propeller's maximum speed increase/decrease from a yaw command
+ *
+ * @unit rad/s
+ */
+PARAM_DEFINE_FLOAT(MIN_ROLL_VEL, 20.0f);
+
+/**
+ * Roll maximum velocity
+ *
+ * The propeller's maximum speed increase/decrease from a yaw command
+ *
+ * @unit rad/s
+ */
+PARAM_DEFINE_FLOAT(MAX_ROLL_VEL, 120.0f);

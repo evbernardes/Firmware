@@ -85,7 +85,7 @@ int setup_uart(char *uart_name, int &serial_fd);
 // PX4_INFO("Clients created");
 bool is_armed = false;
 bool was_armed = false;
-short int mode = MODE_FLIGHT;
+short int mode = MODE_ROLL;
 
 /**
  * Print the correct usage.
@@ -229,13 +229,20 @@ int iq_thread_main(int argc, char *argv[])
   param_t max_speed_param;
   param_t max_pulse_volts_param;
   param_t max_yaw_param;
+  param_t min_roll_param;
+  param_t max_roll_param;
+
   float max_speed_value = 0.0f;
   float max_pulse_volts_value = 0.0f;
   float max_yaw_value = 0.0f;
+  float min_roll_value = 0.0f;
+  float max_roll_value = 0.0f;
 
   max_speed_param = param_find("PROP_MAX_SPEED");
   max_pulse_volts_param = param_find("PROP_MAX_PULSE");
   max_yaw_param = param_find("PROP_MAX_YAW");
+  min_roll_param = param_find("MIN_ROLL_VEL");
+  max_roll_param = param_find("MAX_ROLL_VEL");
 
   if (max_speed_param != PARAM_INVALID) {
     param_get(max_speed_param, &max_speed_value);
@@ -259,6 +266,22 @@ int iq_thread_main(int argc, char *argv[])
   else
   {
     PX4_WARN("PROP_MAX_YAW param invalid");
+  }
+
+  if (min_roll_param != PARAM_INVALID) {
+    param_get(min_roll_param, &min_roll_value);
+  }
+  else
+  {
+    PX4_WARN("MIN_ROLL_VEL param invalid");
+  }
+
+  if (max_roll_param != PARAM_INVALID) {
+    param_get(max_roll_param, &max_roll_value);
+  }
+  else
+  {
+    PX4_WARN("MAX_ROLL_VEL param invalid");
   }
 
   PX4_INFO("PARAMS Loaded");
@@ -287,16 +310,20 @@ int iq_thread_main(int argc, char *argv[])
 	orb_set_interval(actuator_ctrl_sub_fd, 1);
 	orb_set_interval(actuator_arm_sub_fd, 1);
 
+  int input_rc_sub_fd = orb_subscribe(ORB_ID(input_rc));
+  orb_set_interval(input_rc_sub_fd, 100);
+
   px4_pollfd_struct_t fds[] = {
         { .fd = actuator_ctrl_sub_fd,   .events = POLLIN },
         { .fd = actuator_arm_sub_fd,   .events = POLLIN },
+        { .fd = input_rc_sub_fd,   .events = POLLIN },
   //       /* there could be more file descriptors here, in the form like:
   //        * { .fd = other_sub_fd,   .events = POLLIN },
     };
 
 	// initialize variables
 	int error_counter = 0;
-  float velocity = 0, x_roll = 0, y_pitch = 0, z_yaw = 0;
+  float velocity = 0, x_roll = 0, y_pitch = 0, z_yaw = 0, roll_speed = 0;
   float amplitude = 0, phase = 0;
   // int yaw_max = 100;
   thread_running = true;
@@ -371,11 +398,24 @@ int iq_thread_main(int argc, char *argv[])
           vsc2.amplitude_.set(com,amplitude);
 
         } else if (mode == MODE_ROLL) {
-          pmc1.ctrl_velocity_.set(com,velocity);
+
+          struct input_rc_s rc_raw;
+          orb_copy(ORB_ID(input_rc), input_rc_sub_fd, &rc_raw);
+
+          // roll_speed = actuator_raw.control[1]*max_roll_value;
+          roll_speed = (rc_raw.values[1]/521. - 1499./521.)*(double)max_roll_value;
+
+          if (abs(roll_speed) < min_roll_value)
+            roll_speed = 0;
+
+
+          PX4_INFO("roll_speed = %f | actuator = %f ",(double)roll_speed, (double)actuator_raw.control[1]);
+
+          pmc1.ctrl_velocity_.set(com,roll_speed);
           vsc1.phase_.set(com,0);
           vsc1.amplitude_.set(com,0);
 
-          pmc2.ctrl_velocity_.set(com,-velocity);
+          pmc2.ctrl_velocity_.set(com,-roll_speed);
           vsc2.phase_.set(com,0);
           vsc2.amplitude_.set(com,0);
         }
