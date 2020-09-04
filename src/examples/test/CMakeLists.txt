@@ -38,3 +38,31 @@ px4_add_module(
         test.c
     DEPENDS
     )
+
+px4_add_module(
+    MODULE examples__ParamLoad
+    MAIN ParamLoad
+    STACK_MAIN 2000
+    SRCS
+        ParamLoad.c
+    DEPENDS
+    )
+
+
+px4_add_module(
+    MODULE examples__Attitude_Acc
+    MAIN Attitude_Acc
+    STACK_MAIN 2000
+    SRCS
+        Attitude_Acc.c
+    DEPENDS
+    )
+
+px4_add_module(
+    MODULE examples__Attitude
+    MAIN Attitude
+    STACK_MAIN 2000
+    SRCS
+        Attitude.c
+    DEPENDS
+    )

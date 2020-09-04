@@ -54,4 +54,4 @@ set PWM_AUX_OUT 1234
 set PWM_OUT 34
 
 # start iqinetics speed modules
-iq start /dev/ttyS1
+#iq start /dev/ttyS3

@@ -39,6 +39,7 @@ px4_add_module(
     	byte_queue.c
     	crc_helper.c
     	generic_interface.cpp
+    	iq_helpers.cpp
     	packet_finder.c
     	#iqinetics.c
 	DEPENDS

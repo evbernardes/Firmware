@@ -58,7 +58,6 @@
 
 #define clrscr() PX4_INFO("\e[1;1H\e[2J")
 
-
 __EXPORT int test_main(int argc, char *argv[]);
 
 int test_main(int argc, char *argv[])
@@ -164,12 +163,60 @@ int test_main(int argc, char *argv[])
                 struct sensor_combined_s sensor_combined_raw;
                 orb_copy(ORB_ID(sensor_combined), sensor_combined_sub_fd, &sensor_combined_raw);
 
-
-                double acc_x = sensor_combined_raw.accelerometer_m_s2[0];
-                double acc_y = sensor_combined_raw.accelerometer_m_s2[1];
-                double acc_z = sensor_combined_raw.accelerometer_m_s2[2];
-                double phase = atan2(acc_y,acc_x);
-
+                PX4_INFO("|\n\
+                    is_armed = %i\n\
+                    control_manual = %i\n\
+                    control_auto = %i\n\
+                    control_position = %i\n\
+                    rc_mode = %i\n\
+                    ac_0 = %f\n\
+                    ac_1 = %f\n\
+                    ac_2 = %f\n\
+                    ac_3 = %f\n\
+                    rc_0 = %f\n\
+                    rc_1 = %f\n\
+                    rc_2 = %f\n\
+                    rc_3 = %f\n\
+                    rc_4 = %f\n\
+                    rc_m_0 = %f\n\
+                    rc_m_1 = %f\n\
+                    rc_m_2 = %f\n\
+                    rc_m_3 = %f\n\
+                    rc_m_4 = %f\n\
+                    q_0 = %f\n\
+                    q_1 = %f\n\
+                    q_2 = %f\n\
+                    q_3 = %f\n\
+                    g_0 = %f\n\
+                    g_1 = %f\n\
+                    g_2 = %f",
+                    (bool)actuator_arm_raw.armed,
+                    (bool)vehicle_control_mode_raw.flag_control_manual_enabled,
+                    (bool)vehicle_control_mode_raw.flag_control_auto_enabled,
+                    (bool)vehicle_control_mode_raw.flag_control_position_enabled,
+                    (bool)vehicle_status_raw.rc_input_mode,
+                    (double)actuator_raw.control[0],
+                    (double)actuator_raw.control[1],
+                    (double)actuator_raw.control[2],
+                    (double)actuator_raw.control[3],
+                    (double)rc_raw.values[0],
+                    (double)rc_raw.values[1],
+                    (double)rc_raw.values[2],
+                    (double)rc_raw.values[3],
+                    (double)rc_raw.values[4],
+                    (double)actuator_manual_raw.control[0],
+                    (double)actuator_manual_raw.control[1],
+                    (double)actuator_manual_raw.control[2],
+                    (double)actuator_manual_raw.control[3],
+                    (double)actuator_manual_raw.control[4],
+                    (double)vehicle_attitude_raw.q[0],
+                    (double)vehicle_attitude_raw.q[1],
+                    (double)vehicle_attitude_raw.q[2],
+                    (double)vehicle_attitude_raw.q[3],
+                    (double)sensor_combined_raw.gyro_rad[0],
+                    (double)sensor_combined_raw.gyro_rad[1],
+                    (double)sensor_combined_raw.gyro_rad[2]
+                    );
                 clrscr();
                 PX4_INFO("|\n\
                     is_armed = %i\n\
@@ -177,19 +224,19 @@ int test_main(int argc, char *argv[])
                     control_auto = %i\n\
                     control_position = %i\n\
                     rc_mode = %i\n\
-                    acc_x = %f\n\
-                    acc_y = %f\n\
-                    acc_z = %f\n\
-                    phase = %f",
+                    q_0 = %f\n\
+                    q_1 = %f\n\
+                    q_2 = %f\n\
+                    q_3 = %f",
                     (bool)actuator_arm_raw.armed,
                     (bool)vehicle_control_mode_raw.flag_control_manual_enabled,
                     (bool)vehicle_control_mode_raw.flag_control_auto_enabled,
                     (bool)vehicle_control_mode_raw.flag_control_position_enabled,
                     (bool)vehicle_status_raw.rc_input_mode,
-                    acc_x,
-                    acc_y,
-                    acc_z,
-                    180 - phase*M_RAD_TO_DEG
+                    (double)vehicle_attitude_raw.q[0],
+                    (double)vehicle_attitude_raw.q[1],
+                    (double)vehicle_attitude_raw.q[2],
+                    (double)vehicle_attitude_raw.q[3]
                     );
 
                 /* set att and publish this information for other apps

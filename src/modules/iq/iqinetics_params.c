@@ -52,7 +52,7 @@ PARAM_DEFINE_FLOAT(PROP_MAX_YAW, 500.0f);
 
 
 /**
- * Roll minimum velocity
+ * Rolling mode minimum velocity
  *
  * The propeller's maximum speed increase/decrease from a yaw command
  *
@@ -61,10 +61,28 @@ PARAM_DEFINE_FLOAT(PROP_MAX_YAW, 500.0f);
 PARAM_DEFINE_FLOAT(MIN_ROLL_VEL, 20.0f);
 
 /**
- * Roll maximum velocity
+ * Rolling mode maximum velocity
  *
  * The propeller's maximum speed increase/decrease from a yaw command
  *
  * @unit rad/s
  */
 PARAM_DEFINE_FLOAT(MAX_ROLL_VEL, 120.0f);
+
+/**
+ * Rolling mode roll angle safety
+ *
+ * The propeller's maximum speed increase/decrease from a yaw command
+ *
+ * @unit rad
+ */
+PARAM_DEFINE_FLOAT(MAX_ROLL_INC, 0.78f); // pi / 4
+
+/**
+ * Phase of up motor
+ *
+ * The propeller's maximum speed increase/decrease from a yaw command
+ *
+ * @unit rad
+ */
+PARAM_DEFINE_FLOAT(MOTOR_PHASE_UP, 0.0f); // 0
