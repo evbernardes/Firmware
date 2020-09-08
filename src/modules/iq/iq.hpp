@@ -28,6 +28,9 @@
 #define MODE_FLIGHT 0
 #define MODE_ROLL 1
 #define MODE_CALIBRATION 2
+#define TIMEOUT 0.002
+#define SLEEP_TIME 30000
+#define TOPICS_TIME 150
 
 extern "C" __EXPORT int iq_main(int argc, char *argv[]);
 static volatile bool thread_should_exit = false;   /**< Daemon exit flag */
@@ -36,29 +39,37 @@ static volatile int daemon_task;       /**< Handle of daemon task / thread */
 
 int iq_thread_main(int argc, char *argv[]);
 void enter_coast_mode();
-void send_commands();
-void set_parameters();
+void send_commands(float *actuator_control);
 void calibrate();
+// void set_parameters();
+// void set_orb();
+// int set_motors();
+int set_parameter(char *param_name, float *param_value);
+int init_system(float timeout, int sleep_time);
 
 bool is_armed = false;
 bool was_armed = false;
 short int mode = MODE_FLIGHT;
 
 // param values to be loaded
-float max_speed_value = 0.0f;
-float max_pulse_volts_value = 0.0f;
-float max_yaw_value = 0.0f;
-float min_roll_vel_value = 0.0f;
-float max_roll_vel_value = 0.0f;
-float max_roll_inclination_value = 0.0f;
+float max_speed_value = 0.01f;
+float max_pulse_volts_value = 0.01;
+float max_yaw_value = 0.01;
+float min_roll_vel_value = 0.01;
+float max_roll_vel_value = 0.01;
+float max_roll_inclination_value = 0.01;
 
 // other variables
 int error_counter = 0;
 float velocity = 0, x_roll = 0, y_pitch = 0, z_yaw = 0;//, roll_speed = 0;
 float amplitude = 0, phase = 0;
+float q[4];
+float gyro[3];
+float acc[3];
 
 // communication variables
 GenericInterface com;
+char *uart_name1;
 PropellerMotorControlClient pmc1(0);
 PropellerMotorControlClient pmc2(1);
 VoltageSuperPositionClient  vsc1(0);
@@ -66,3 +77,12 @@ VoltageSuperPositionClient  vsc2(1);
 SystemControlClient sys(0);
 int serial_fds = -1;
 
+// int actuator_arm_sub_fd = orb_subscribe(ORB_ID(actuator_armed));
+// int actuator_ctrl_manual_sub_fd = orb_subscribe(ORB_ID(actuator_controls_3));
+// int sensor_combined_sub_fd = orb_subscribe(ORB_ID(sensor_combined));
+// int vehicle_attitude_sub_fd = orb_subscribe(ORB_ID(vehicle_attitude));
+int actuator_arm_sub_fd;
+int actuator_ctrl_manual_sub_fd;
+int sensor_combined_sub_fd;
+
+px4_pollfd_struct_t fds[4];

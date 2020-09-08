@@ -44,11 +44,10 @@ int iq_thread_main(int argc, char *argv[])
 {
 	PX4_INFO("IQinetics Underactuated Propeller Thread Loading");
 
-    // Load parameters, set UART comm to motor, set ORB topics
     if(init_system(TIMEOUT, SLEEP_TIME) != 0)
         return 1;
 
-	// initialize thread variables
+	// initialize variables
     error_counter = 0;
     thread_running = true;
 
@@ -56,11 +55,11 @@ int iq_thread_main(int argc, char *argv[])
 	while(!thread_should_exit)
 	{
         // handle errors
-		int poll_ret = px4_poll(fds, 3, TOPICS_TIME);
+		int poll_ret = px4_poll(fds, 3, 40);
 		// /* handle the poll result */
 		if (poll_ret == 0) {
 			/* this means none of our providers is giving us data */
-			PX4_ERR("Got no data within a %ims",TOPICS_TIME);
+			PX4_ERR("Got no data within a 40ms");
 
 		} else if (poll_ret < 0) {
 			/* this is seriously bad - should be an emergency */
@@ -76,6 +75,7 @@ int iq_thread_main(int argc, char *argv[])
                 // Get the actuator armed data
                 struct actuator_armed_s actuator_arm_raw;
                 orb_copy(ORB_ID(actuator_armed), actuator_arm_sub_fd, &actuator_arm_raw);
+
                 is_armed = actuator_arm_raw.armed;
             }
 
@@ -83,25 +83,15 @@ int iq_thread_main(int argc, char *argv[])
             if (is_armed) {
                 struct actuator_controls_s actuator_raw;
                 orb_copy(ORB_ID(actuator_controls_3), actuator_ctrl_manual_sub_fd, &actuator_raw);
+                // velocity  = actuator_raw.control[3];
+                // x_roll    = actuator_raw.control[0];
+                // y_pitch   = actuator_raw.control[1];
+                // z_yaw     = actuator_raw.control[2];
+                // PX4_INFO("%f, %f, %f, %f",actuator_raw.control[0], actuator_raw.control[1], actuator_raw.control[2], actuator_raw.control[3]);
+                // PX4_INFO("SPEED = %f, PULSE = %f, YAW = %f", max_speed_value, max_pulse_volts_value, max_yaw_value);
+                // PX4_INFO("PROP_MAX_SPEED2 set to %f", max_speed_value);
+                // PX4_INFO("PROP_MAX_PULSE2 set to %f", max_pulse_volts_value);
                 send_commands(actuator_raw.control);
-
-                struct sensor_combined_s sensor_combined_raw;
-                orb_copy(ORB_ID(sensor_combined), sensor_combined_sub_fd, &sensor_combined_raw);
-                // gyro[0] = sensor_combined_raw.gyro_rad[0];
-                // gyro[1] = sensor_combined_raw.gyro_rad[1];
-                // gyro[2] = sensor_combined_raw.gyro_rad[2];
-                // acc[0] = sensor_combined_raw.accelerometer_m_s2[0];
-                // acc[1] = sensor_combined_raw.accelerometer_m_s2[1];
-                // acc[2] = sensor_combined_raw.accelerometer_m_s2[2];
-                memcpy(gyro, sensor_combined_raw.gyro_rad, sizeof gyro);
-                memcpy(acc, sensor_combined_raw.accelerometer_m_s2, sizeof acc);
-                PX4_INFO("%f, %f, %f, %f, %f, %f, %f, %f, %f",
-                    gyro[0],gyro[1],gyro[2],
-                    acc[0],acc[1],acc[2],
-                    velocity,
-                    amplitude,
-                    phase);
-
             }
 
             // if state changed from armed to unarmed, enter coast mode
@@ -149,25 +139,65 @@ int init_system(float timeout, int sleep_time){
     fds[2] = (px4_pollfd_struct_t) { .fd = sensor_combined_sub_fd,   .events = POLLIN };
 
     // load all parameters
-    int check = 0;
-    check = set_parameter("PROP_MAX_SPEED", &max_speed_value);
-    check = set_parameter("PROP_MAX_PULSE", &max_pulse_volts_value);
-    check = set_parameter("PROP_MAX_YAW", &max_yaw_value);
-    check = set_parameter("MIN_ROLL_VEL", &min_roll_vel_value);
-    check = set_parameter("MAX_ROLL_VEL", &max_roll_vel_value);
-    check = set_parameter("MAX_ROLL_INC", &max_roll_inclination_value);
-    if(check != 0){
-        PX4_WARN("PARAMS could NOT be Loaded");
-        return 2;
-    }
+    set_parameter("PROP_MAX_SPEED", &max_speed_value);
+    set_parameter("PROP_MAX_PULSE", &max_pulse_volts_value);
+    set_parameter("PROP_MAX_YAW", &max_yaw_value);
+    set_parameter("MIN_ROLL_VEL", &min_roll_vel_value);
+    set_parameter("MAX_ROLL_VEL", &max_roll_vel_value);
+    set_parameter("MAX_ROLL_INC", &max_roll_inclination_value);
+    // param_t max_speed_param;
+    // param_t max_pulse_volts_param;
+    // param_t max_yaw_param;
+    // param_t min_roll_vel_param;
+    // param_t max_roll_vel_param;
+    // param_t max_roll_inclination_param;
+    // max_speed_param = param_find("PROP_MAX_SPEED");
+    // max_pulse_volts_param = param_find("PROP_MAX_PULSE");
+    // max_yaw_param = param_find("PROP_MAX_YAW");
+    // min_roll_vel_param = param_find("MIN_ROLL_VEL");
+    // max_roll_vel_param = param_find("MAX_ROLL_VEL");
+    // max_roll_inclination_param = param_find("MAX_ROLL_INC");
+
+    // if (max_speed_param != PARAM_INVALID){
+    //     param_get(max_speed_param, &max_speed_value);
+    //     PX4_INFO("PROP_MAX_SPEED set to %f", max_speed_value);
+    // } else
+    //     PX4_WARN("PROP_MAX_SPEED param invalid");
+
+    // if (max_pulse_volts_param != PARAM_INVALID){
+    //     param_get(max_pulse_volts_param, &max_pulse_volts_value);
+    //     PX4_INFO("PROP_MAX_PULSE set to %f", max_pulse_volts_value);
+    // } else
+    //     PX4_WARN("PROP_MAX_PULSE param invalid");
+
+    // if (max_yaw_param != PARAM_INVALID){
+    //     param_get(max_yaw_param, &max_yaw_value);
+    //     PX4_INFO("PROP_MAX_YAW set to %f", max_yaw_value);
+    // } else
+    //     PX4_WARN("PROP_MAX_YAW param invalid");
+
+    // if (min_roll_vel_param != PARAM_INVALID){
+    //     param_get(min_roll_vel_param, &min_roll_vel_value);
+    //     PX4_INFO("MIN_ROLL_VEL set to %f", min_roll_vel_value);
+    // } else
+    //     PX4_WARN("MIN_ROLL_VEL param invalid");
+
+    // if (max_roll_vel_param != PARAM_INVALID){
+    //     param_get(max_roll_vel_param, &min_roll_vel_value);
+    //     PX4_INFO("MAX_ROLL_VEL set to %f", min_roll_vel_value);
+    // } else
+    //     PX4_WARN("MAX_ROLL_VEL param invalid");
+
+    // if (max_roll_inclination_param != PARAM_INVALID){
+    //     param_get(max_roll_inclination_param, &max_roll_inclination_value);
+    //     PX4_INFO("MAX_ROLL_INC set to %f", max_roll_inclination_value);
+    // } else
+    //     PX4_WARN("MAX_ROLL_INC param invalid");
 
     PX4_INFO("PARAMS Loaded");
     return 0;
 }
 
-/**
- * Load single parameter
- */
 int set_parameter(char *param_name, float *param_value){
     param_t param;
     param = param_find(param_name);
@@ -195,27 +225,25 @@ static void usage(const char *reason) {
  * Send commands to the motors
  */
 void send_commands(float *actuator_control) {
-    // float velocity  = actuator_control[3];
-    // float x_roll    = actuator_control[0];
-    // float y_pitch   = actuator_control[1];
-    // float z_yaw     = actuator_control[2];
-    velocity  = actuator_control[3];
-    x_roll    = actuator_control[0];
-    y_pitch   = actuator_control[1];
-    z_yaw     = actuator_control[2];
+    // PX4_INFO("PROP_MAX_SPEED3 set to %f", max_speed_value);
+    // PX4_INFO("PROP_MAX_PULSE3 set to %f", max_pulse_volts_value);
+    float velocity  = actuator_control[3];
+    float x_roll    = actuator_control[0];
+    float y_pitch   = actuator_control[1];
+    float z_yaw     = actuator_control[2];
     double delta;
     int sign = 1;
     if (mode == MODE_FLIGHT) {
         // Vehicle behavior goes here
-        velocity  *= -max_speed_value;
-        // x_roll    *= max_pulse_volts_value;
-        // y_pitch   *= max_pulse_volts_value;
+        velocity  *= max_speed_value;
+        x_roll    *= max_pulse_volts_value;
+        y_pitch   *= max_pulse_volts_value;
         // z_yaw     *= max_yaw_value;
         z_yaw     = 0;
         delta = z_yaw/2;
-        amplitude = sqrt(x_roll * x_roll + y_pitch * y_pitch)*max_pulse_volts_value;
+        amplitude = sqrt(x_roll * x_roll + y_pitch * y_pitch);
         phase = atan2(x_roll,y_pitch);
-        // PX4_INFO("%f, %f, %f, %f",max_speed_value, velocity, amplitude, phase*M_RAD_TO_DEG);
+        PX4_INFO("%f, %f, %f, %f",max_speed_value, velocity, amplitude, phase*M_RAD_TO_DEG);
 
     } else if (mode == MODE_ROLL) {
         sign = -1;
