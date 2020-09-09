@@ -51,16 +51,28 @@ int iq_thread_main(int argc, char *argv[])
 	// initialize thread variables
     error_counter = 0;
     thread_running = true;
+    int print_loop = 0;
+    control[0] = 0.0;
+    control[1] = 0.0;
+    control[2] = 0.0;
+    control[3] = 0.0;
+    control[4] = 0.0;
+
+    // test_i = 0;
+    // test_j = 0;
+    // test_t = 0;
+    // clock_t start = clock();
+    // clock_t stop = start;
 
 	// main while loop for this thread
 	while(!thread_should_exit)
 	{
         // handle errors
-		int poll_ret = px4_poll(fds, 3, TOPICS_TIME);
+		int poll_ret = px4_poll(fds, 2, TOPICS_TIME);
 		// /* handle the poll result */
 		if (poll_ret == 0) {
 			/* this means none of our providers is giving us data */
-			PX4_ERR("Got no data within a %ims",TOPICS_TIME);
+			PX4_ERR("Got no data within a %ims", TOPICS_TIME);
 
 		} else if (poll_ret < 0) {
 			/* this is seriously bad - should be an emergency */
@@ -82,26 +94,18 @@ int iq_thread_main(int argc, char *argv[])
             // get actuator commands and send commands if armed
             if (is_armed) {
                 struct actuator_controls_s actuator_raw;
+                // if (mode == MODE_TEST){
+                    // orb_copy(ORB_ID(actuator_controls_2), actuator_ctrl_sub_fd, &actuator_raw);
+                // } else {
                 orb_copy(ORB_ID(actuator_controls_3), actuator_ctrl_manual_sub_fd, &actuator_raw);
-                send_commands(actuator_raw.control);
-
-                struct sensor_combined_s sensor_combined_raw;
-                orb_copy(ORB_ID(sensor_combined), sensor_combined_sub_fd, &sensor_combined_raw);
-                // gyro[0] = sensor_combined_raw.gyro_rad[0];
-                // gyro[1] = sensor_combined_raw.gyro_rad[1];
-                // gyro[2] = sensor_combined_raw.gyro_rad[2];
-                // acc[0] = sensor_combined_raw.accelerometer_m_s2[0];
-                // acc[1] = sensor_combined_raw.accelerometer_m_s2[1];
-                // acc[2] = sensor_combined_raw.accelerometer_m_s2[2];
-                memcpy(gyro, sensor_combined_raw.gyro_rad, sizeof gyro);
-                memcpy(acc, sensor_combined_raw.accelerometer_m_s2, sizeof acc);
-                PX4_INFO("%f, %f, %f, %f, %f, %f, %f, %f, %f",
-                    gyro[0],gyro[1],gyro[2],
-                    acc[0],acc[1],acc[2],
-                    velocity,
-                    amplitude,
-                    phase);
-
+                // }
+                // PX4_INFO("vel = %.2f",actuator_raw.control[3]);
+                // if ((mode == MODE_TEST & actuator_raw.control[4] == 1.0) ||
+                //    (mode == MODE_FLIGHT & actuator_raw.control[4] == 0.0)){
+                if (actuator_raw.control[4] == control[4]){
+                    memcpy(control, actuator_raw.control, sizeof control);
+                }
+                send_commands(control);
             }
 
             // if state changed from armed to unarmed, enter coast mode
@@ -117,8 +121,6 @@ int iq_thread_main(int argc, char *argv[])
     fflush(stdout);
 	return 0;
 }
-
-
 /* Startup Functions */
 
 /**
@@ -140,17 +142,24 @@ int init_system(float timeout, int sleep_time){
     // set ORB topics system
     actuator_arm_sub_fd = orb_subscribe(ORB_ID(actuator_armed));
     actuator_ctrl_manual_sub_fd = orb_subscribe(ORB_ID(actuator_controls_3)); // manual control
-    sensor_combined_sub_fd = orb_subscribe(ORB_ID(sensor_combined));
+    // actuator_ctrl_sub_fd = orb_subscribe(ORB_ID(actuator_controls_2)); // test control
+    // sensor_combined_sub_fd = orb_subscribe(ORB_ID(sensor_combined));
+    // vehicle_attitude_sub_fd = orb_subscribe(ORB_ID(vehicle_attitude));
     orb_set_interval(actuator_arm_sub_fd, 1);
     orb_set_interval(actuator_ctrl_manual_sub_fd, 1);
-    orb_set_interval(sensor_combined_sub_fd, 1);
+    // orb_set_interval(actuator_ctrl_sub_fd, 1);
+    // orb_set_interval(sensor_combined_sub_fd, 1);
+    // orb_set_interval(vehicle_attitude_sub_fd, 1);
     fds[0] = (px4_pollfd_struct_t) { .fd = actuator_arm_sub_fd,   .events = POLLIN };
     fds[1] = (px4_pollfd_struct_t) { .fd = actuator_ctrl_manual_sub_fd,   .events = POLLIN };
-    fds[2] = (px4_pollfd_struct_t) { .fd = sensor_combined_sub_fd,   .events = POLLIN };
+    // fds[1] = (px4_pollfd_struct_t) { .fd = actuator_ctrl_sub_fd,   .events = POLLIN };
+    // fds[2] = (px4_pollfd_struct_t) { .fd = sensor_combined_sub_fd,   .events = POLLIN };
+    // fds[3] = (px4_pollfd_struct_t) { .fd = vehicle_attitude_sub_fd,   .events = POLLIN };
 
     // load all parameters
     int check = 0;
     check = set_parameter("PROP_MAX_SPEED", &max_speed_value);
+    check = set_parameter("PROP_MIN_PULSE", &min_pulse_volts_value);
     check = set_parameter("PROP_MAX_PULSE", &max_pulse_volts_value);
     check = set_parameter("PROP_MAX_YAW", &max_yaw_value);
     check = set_parameter("MIN_ROLL_VEL", &min_roll_vel_value);
@@ -182,40 +191,23 @@ int set_parameter(char *param_name, float *param_value){
 }
 
 /**
- * Print correct usage.
- */
-static void usage(const char *reason) {
-	if (reason) {
-		fprintf(stderr, "%s\n", reason);
-	}
-	fprintf(stderr, "usage: iq {start|stop|status|switch}\n\n");
-}
-
-/**
  * Send commands to the motors
  */
 void send_commands(float *actuator_control) {
-    // float velocity  = actuator_control[3];
-    // float x_roll    = actuator_control[0];
-    // float y_pitch   = actuator_control[1];
-    // float z_yaw     = actuator_control[2];
     velocity  = actuator_control[3];
     x_roll    = actuator_control[0];
     y_pitch   = actuator_control[1];
     z_yaw     = actuator_control[2];
     double delta;
     int sign = 1;
-    if (mode == MODE_FLIGHT) {
+    if ((mode == MODE_FLIGHT) || (mode == MODE_TEST)) {
         // Vehicle behavior goes here
         velocity  *= -max_speed_value;
-        // x_roll    *= max_pulse_volts_value;
-        // y_pitch   *= max_pulse_volts_value;
-        // z_yaw     *= max_yaw_value;
         z_yaw     = 0;
         delta = z_yaw/2;
         amplitude = sqrt(x_roll * x_roll + y_pitch * y_pitch)*max_pulse_volts_value;
         phase = atan2(x_roll,y_pitch);
-        // PX4_INFO("%f, %f, %f, %f",max_speed_value, velocity, amplitude, phase*M_RAD_TO_DEG);
+
 
     } else if (mode == MODE_ROLL) {
         sign = -1;
@@ -230,6 +222,12 @@ void send_commands(float *actuator_control) {
             z_yaw = 0;
     }
 
+    if(amplitude < min_pulse_volts_value) {
+        amplitude = 0;
+        phase = 0;
+    }
+
+    // PX4_INFO("vel=%f\tphase=%.1f\tpulse=%.2f",velocity,phase*M_RAD_TO_DEG,amplitude);
     pmc1.ctrl_velocity_.set(com,velocity - delta); // INDEX_THROTTLE = 3, INDEX_YAW = 2
     vsc1.phase_.set(com,phase);
     vsc1.amplitude_.set(com,amplitude);
@@ -290,28 +288,26 @@ int iq_main(int argc, char *argv[]) {
     } else {
         uart_name1 = argv[2];
     }
-    // if(setup_uart(uart_name1, serial_fds) == 0)
-    //     PX4_INFO("Opened %s with fd %d", uart_name1, serial_fds);
-    // else
-    //     return 1;
 
     thread_should_exit = false;
+
     daemon_task = px4_task_spawn_cmd("iq",
-             SCHED_DEFAULT,
-             SCHED_PRIORITY_DEFAULT - 1,
-             5000,
-             iq_thread_main,
-             //(argv) ? (char *const *)&argv[2] : (char *const *)NULL);
+            SCHED_DEFAULT,
+            SCHED_PRIORITY_DEFAULT - 1,
+            2000,
+            iq_thread_main,
+            //(argv) ? (char *const *)&argv[2] : (char *const *)NULL);
             //  (argv) ? (char *const *)&uart_name1 : (char *const *)NULL);
             (char *const *)NULL);
-
     PX4_INFO("IQinetics Underactuated Propeller Daemon Spawned");
+
     return 0;
   }
 
+
   if (!strcmp(argv[1], "switch")) {
     if (argc < 3) {
-      PX4_INFO("usage: iq switch {flight|roll|calibration}\n");
+      PX4_INFO("usage: iq switch {flight|roll|test}\n");
       return -1;
 
     } else if (!thread_running) {
@@ -321,28 +317,47 @@ int iq_main(int argc, char *argv[]) {
     } else if (!strcmp(argv[2], "flight")) {
       if (mode == MODE_FLIGHT) {
         PX4_INFO("already in flight mode\n");
-        return 0;
+        // return 0;
       } else {
         PX4_INFO("entering flight mode\n");
         mode = MODE_FLIGHT;
-        return 0;
+        control[4] = 0.0;
+        // return 0;
       }
 
     } else if (!strcmp(argv[2], "roll")) {
       if (mode == MODE_ROLL) {
         PX4_INFO("already in roll mode\n");
-        return 0;
+        // return 0;
       } else {
         PX4_INFO("entering roll mode\n");
         mode = MODE_ROLL;
-        return 0;
+        control[4] = 0.0;
+        // return 0;
+      }
+
+    } else if (!strcmp(argv[2], "test")) {
+      if (mode == MODE_TEST) {
+        PX4_INFO("already in test mode\n");
+        // return 0;
+      } else {
+        PX4_INFO("entering test mode\n");
+        mode = MODE_TEST;
+        control[4] = 1.0;
+        // return 0;
       }
     }
 
     else {
-      PX4_INFO("usage: iq switch [flight:roll]\n");
+      PX4_INFO("usage: iq switch {flight|roll|test}\n");
       return -1;
     }
+
+    control[0] = 0.0;
+    control[1] = 0.0;
+    control[2] = 0.0;
+    control[3] = 0.0;
+    return 0;
   }
 
   if (!strcmp(argv[1], "stop")) {
@@ -350,11 +365,15 @@ int iq_main(int argc, char *argv[]) {
     {
       PX4_ERR("cannot stop while armed");
       return -1;
+    } else if (!thread_running) {
+        PX4_INFO("already stopped\n");
+        /* this is not an error */
+        return 0;
+    } else {
+        PX4_INFO("stopping");
+        thread_should_exit = true;
+        return 0;
     }
-
-    PX4_INFO("stopping");
-    thread_should_exit = true;
-    return 0;
   }
 
   if (!strcmp(argv[1], "status")) {
@@ -373,4 +392,14 @@ int iq_main(int argc, char *argv[]) {
 
   PX4_ERR("unrecognized command");
   return 1;
+}
+
+/**
+ * Print correct usage.
+ */
+static void usage(const char *reason) {
+	if (reason) {
+		fprintf(stderr, "%s\n", reason);
+	}
+	fprintf(stderr, "usage: iq {start|stop|status|switch}\n\n");
 }

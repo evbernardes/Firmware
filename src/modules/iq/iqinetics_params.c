@@ -6,6 +6,21 @@
  */
 
 /**
+ * Propeller min pulse
+ *
+ * The minimum pulse voltage amplitude (below that, amplitude goes to zero)
+ *
+ * @unit volts
+ * @min 0
+ * @max 11.1
+ * @decimal 1
+ * @increment 0.1
+ * @reboot_required true
+ * @group IQinetics
+ */
+PARAM_DEFINE_FLOAT(PROP_MIN_PULSE, 0.1f);
+
+/**
  * Propeller max pulse
  *
  * The maximum pulse voltage amplitude

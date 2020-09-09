@@ -44,3 +44,18 @@ px4_add_module(
     	#iqinetics.c
 	DEPENDS
 	)
+
+px4_add_module(
+	MODULE modules__iq_test
+	MAIN iq_test
+	STACK_MAIN 3000
+	SRCS
+	iq_test.cpp
+    	#byte_queue.c
+    	#crc_helper.c
+    	#generic_interface.cpp
+    	#iq_helpers.cpp
+    	#packet_finder.c
+    	#iqinetics.c
+	DEPENDS
+	)

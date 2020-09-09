@@ -10,6 +10,7 @@
 #include <cmath>
 #include <fcntl.h>
 #include <termios.h>
+#include <time.h>
 #define clrscr() PX4_INFO("\e[1;1H\e[2J")
 
 #include <uORB/uORB.h>
@@ -27,32 +28,51 @@
 
 #define MODE_FLIGHT 0
 #define MODE_ROLL 1
-#define MODE_CALIBRATION 2
+#define MODE_TEST 2
+#define MODE_CALIBRATION 3
 #define TIMEOUT 0.002
 #define SLEEP_TIME 30000
 #define TOPICS_TIME 150
+// #define TEST_SPEED_MIN 0.2
+// #define TEST_SPEED_MAX 0.7
+// #define TEST_SPEED_N 2
+// #define TEST_PULSE_N 2
+// #define TEST_PULSE_MIN 0.0
+// #define TEST_PULSE_MAX 1.0
+// #define TEST_TIME 2
+
+struct parameter{
+    char* name;
+    float value;
+};
+
+struct orb_topic {
+    int fd;
+    const orb_metadata id;
+    unsigned int interval;
+};
 
 extern "C" __EXPORT int iq_main(int argc, char *argv[]);
 static volatile bool thread_should_exit = false;   /**< Daemon exit flag */
 static volatile bool thread_running = false;   /**< Daemon status flag */
 static volatile int daemon_task;       /**< Handle of daemon task / thread */
 
+static void usage(const char *reason);
 int iq_thread_main(int argc, char *argv[]);
 void enter_coast_mode();
 void send_commands(float *actuator_control);
-void calibrate();
-// void set_parameters();
-// void set_orb();
-// int set_motors();
-int set_parameter(char *param_name, float *param_value);
 int init_system(float timeout, int sleep_time);
+int set_parameter(char *param_name, float *param_value);
+// int set_parameter2(parameter *param_struct);
 
 bool is_armed = false;
 bool was_armed = false;
+bool test_started = false;
 short int mode = MODE_FLIGHT;
 
 // param values to be loaded
 float max_speed_value = 0.01f;
+float min_pulse_volts_value = 0.01;
 float max_pulse_volts_value = 0.01;
 float max_yaw_value = 0.01;
 float min_roll_vel_value = 0.01;
@@ -66,6 +86,7 @@ float amplitude = 0, phase = 0;
 float q[4];
 float gyro[3];
 float acc[3];
+float control[5];// = {0, 0, 0, 0, 0};
 
 // communication variables
 GenericInterface com;
@@ -77,12 +98,12 @@ VoltageSuperPositionClient  vsc2(1);
 SystemControlClient sys(0);
 int serial_fds = -1;
 
-// int actuator_arm_sub_fd = orb_subscribe(ORB_ID(actuator_armed));
-// int actuator_ctrl_manual_sub_fd = orb_subscribe(ORB_ID(actuator_controls_3));
-// int sensor_combined_sub_fd = orb_subscribe(ORB_ID(sensor_combined));
-// int vehicle_attitude_sub_fd = orb_subscribe(ORB_ID(vehicle_attitude));
 int actuator_arm_sub_fd;
 int actuator_ctrl_manual_sub_fd;
-int sensor_combined_sub_fd;
+// int actuator_ctrl_sub_fd;
+// int sensor_combined_sub_fd;
+// int vehicle_attitude_sub_fd;
 
-px4_pollfd_struct_t fds[4];
+px4_pollfd_struct_t fds[2];
+
+// orb_topic actuator_arm{}
