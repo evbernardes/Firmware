@@ -94,17 +94,9 @@ int iq_thread_main(int argc, char *argv[])
             // get actuator commands and send commands if armed
             if (is_armed) {
                 struct actuator_controls_s actuator_raw;
-                // if (mode == MODE_TEST){
-                    // orb_copy(ORB_ID(actuator_controls_2), actuator_ctrl_sub_fd, &actuator_raw);
-                // } else {
                 orb_copy(ORB_ID(actuator_controls_3), actuator_ctrl_manual_sub_fd, &actuator_raw);
-                // }
-                // PX4_INFO("vel = %.2f",actuator_raw.control[3]);
-                // if ((mode == MODE_TEST & actuator_raw.control[4] == 1.0) ||
-                //    (mode == MODE_FLIGHT & actuator_raw.control[4] == 0.0)){
-                if (actuator_raw.control[4] == control[4]){
-                    memcpy(control, actuator_raw.control, sizeof control);
-                }
+                if (actuator_raw.control[4] == control[4]) // control[4] == 0 if manual, == 1 if iq_test thread
+                    memcpy(control, actuator_raw.control, sizeof control); // updates if control[4] matches
                 send_commands(control);
             }
 

@@ -30,7 +30,7 @@
 #define MODE_ROLL 1
 #define MODE_TEST 2
 #define MODE_CALIBRATION 3
-#define TIMEOUT 0.002
+#define TIMEOUT 0.003
 #define SLEEP_TIME 30000
 #define TOPICS_TIME 150
 // #define TEST_SPEED_MIN 0.2

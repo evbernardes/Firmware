@@ -21,6 +21,8 @@
 #include <uORB/topics/vehicle_command.h>
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/actuator_armed.h>
+#include <uORB/topics/vehicle_attitude.h>
+#include <uORB/topics/sensor_combined.h>
 // #include <uORB/topics/wind_estimate.h>
 // #include <uORB/topics/parameter_update.h>
 // #include <uORB/topics/vehicle_global_position.h>
@@ -36,71 +38,83 @@ extern "C" __EXPORT int iq_test_main(int argc, char *argv[]);
 static volatile int daemon_task;       /**< Handle of daemon task / thread */
 
 static void usage(const char *reason);
+int set_parameter(char *param_name, float *param_value);
 int publish_actuators();
 struct actuator_controls_s _actuators;
 orb_advert_t _actuator_pub;
 bool thread_running = false;
 bool thread_should_exit = false;
+bool thread_can_exit = false;
 
+// // param values to be loaded
+// float max_speed_value = 0.01f;
+// float max_pulse_volts_value = 0.01;
+
+float stop_signal_time = 2.0;
 float speed_min;
 float speed_max;
 int speed_n;
 float pulse_min ;
 float pulse_max;
 int pulse_n;
-// float speed_min = 0.2;
-// float speed_max = 0.6;
-// int speed_n = 3;
-// float pulse_min = 0;
-// float pulse_max = 0.6;
-// int pulse_n = 5;
-
 float test_phase;
 float step_time;
+// float q[4], acc[4], gyro[4];
+
+int sensor_combined_sub_fd;
+int vehicle_attitude_sub_fd;
 
 int iq_test_thread_main(int argc, char *argv[])
 {
+    // set_parameter("PROP_MAX_SPEED", &max_speed_value);
+    // set_parameter("PROP_MAX_PULSE", &max_pulse_volts_value);
+
+    // set uORB topic subscribers
+    sensor_combined_sub_fd = orb_subscribe(ORB_ID(sensor_combined));
+    vehicle_attitude_sub_fd = orb_subscribe(ORB_ID(vehicle_attitude));
+    orb_set_interval(sensor_combined_sub_fd, 1);
+    orb_set_interval(vehicle_attitude_sub_fd, 1);
+    px4_pollfd_struct_t fds[] = {
+        {.fd = sensor_combined_sub_fd,   .events = POLLIN },
+        {.fd = vehicle_attitude_sub_fd,   .events = POLLIN }};
+
     thread_running = true;
-    float speed = 0.0;
-    float pulse = 0.0;
-
-    // float speed_min = 0.2;
-    // float speed_max = 0.6;
-    // int speed_n = 3;
-    // float pulse_min = 0;
-    // float pulse_max = 0.6;
-    // int pulse_n = 5;
-    // speed_min = 0.2;
-    // speed_max = 0.6;
-    // speed_n = 3;
-    // pulse_min = 0;
-    // pulse_max = 0.6;
-    // pulse_n = 5;
-    // float test_phase;
-    // float step_time;
-
-    bool thread_should_exit = false;
+    // thread_can_exit = false;
+    thread_should_exit = false;
     int error_counter = 0;
     bool is_armed = true;
     bool was_armed = true;
+
     _actuators.control[0] = 0.0f;
     _actuators.control[1] = 0.0f;
     _actuators.control[2] = 0.0f;
     _actuators.control[3] = 0.0f;
     _actuators.control[4] = 1.0f;
     int start, stop;
-    int i = 0, j = 0;
-    start = 0;
-    stop = step_time;
-
+    int i = 0, j = -1;
+    start = hrt_absolute_time();
+    stop = hrt_absolute_time();
     PX4_INFO("Starting test...");
+    // PX4_INFO("i = %d/%d, j = %d/%d, time = %.2f",i+1,speed_n,j+1,pulse_n,start/1000000.0);
+    PX4_INFO("Getting starting data, time = %.2f",start/1000000.0);
+    float speed = 0.0;
+    float pulse = 0.0;
 
     while(!thread_should_exit){
-        // speed = (speed_max - speed_min)*i/(speed_n-1) + speed_min;
-        // pulse = (pulse_max - pulse_min)*j/(pulse_n-1) + pulse_min;
-        // _actuators.control[3] = speed;
-        // _actuators.control[0] = pulse*cos(test_phase);
-        // _actuators.control[1] = pulse*sin(test_phase);
+        if(j > -1){ // motor stopped for first test
+            if(speed_n == 1 || speed_max == speed_min)
+                speed = speed_min;
+            else
+                speed = (speed_max - speed_min)*i/(speed_n-1) + speed_min;
+
+            if(pulse_n == 1 || pulse_max == pulse_min)
+                pulse = pulse_min;
+            else
+                pulse = (pulse_max - pulse_min)*j/(pulse_n-1) + pulse_min;
+        }
+        _actuators.control[3] = speed;
+        _actuators.control[0] = pulse*cos(test_phase);
+        _actuators.control[1] = pulse*sin(test_phase);
 
         if((stop - start)/1000000.0 > step_time){
             if(j == pulse_n - 1 & i == speed_n - 1){
@@ -111,22 +125,50 @@ int iq_test_thread_main(int argc, char *argv[])
             } else {
                 j++;
             }
-            speed = (speed_max - speed_min)*i/(speed_n-1) + speed_min;
-            pulse = (pulse_max - pulse_min)*j/(pulse_n-1) + pulse_min;
-            _actuators.control[3] = speed;
-            _actuators.control[0] = pulse*cos(test_phase*M_DEG_TO_RAD);
-            _actuators.control[1] = pulse*sin(test_phase*M_DEG_TO_RAD);
+            // speed = (speed_max - speed_min)*i/(speed_n-1) + speed_min;
+            // pulse = (pulse_max - pulse_min)*j/(pulse_n-1) + pulse_min;
+            // _actuators.control[3] = speed;
+            // _actuators.control[0] = pulse*cos(test_phase*M_DEG_TO_RAD);
+            // _actuators.control[1] = pulse*sin(test_phase*M_DEG_TO_RAD);
             start = hrt_absolute_time();
-            PX4_INFO("i = %d/%d, j = %d/%d, time = %.2f",i+1,speed_n,j+1,pulse_n,start/1000000.0);
+            // PX4_INFO("i = %d/%d, j = %d/%d, time = %.2f",i+1,speed_n,j+1,pulse_n,stop/1000000.0);
         }
         publish_actuators();
         stop = hrt_absolute_time();
+
+        // handle errors
+		int poll_ret = px4_poll(fds, 2, 150);
+        if (poll_ret > 0) {
+            struct vehicle_attitude_s vehicle_attitude_raw;
+            orb_copy(ORB_ID(vehicle_attitude), vehicle_attitude_sub_fd, &vehicle_attitude_raw);
+            // PX4_INFO("i = %d/%d, j = %d/%d, time = %.2f",i+1,speed_n,j+1,pulse_n,stop/1000000.0);
+            PX4_INFO("%d, %f, %f, %f, %f, %f, %f",
+                stop,
+                speed,
+                pulse,
+                vehicle_attitude_raw.q[0],
+                vehicle_attitude_raw.q[1],
+                vehicle_attitude_raw.q[2],
+                vehicle_attitude_raw.q[3]);
+        }
+
     }
+
 
     _actuators.control[3] = 0.0;
     _actuators.control[0] = 0.0;
     _actuators.control[1] = 0.0;
-    publish_actuators();
+    start = hrt_absolute_time();
+    stop = hrt_absolute_time();
+    PX4_INFO("Sending stop signal..., time = %.2f",stop/1000000.0);
+    thread_should_exit = false;
+    while(!thread_should_exit){
+        if((stop - start)/1000000.0 > stop_signal_time)
+            thread_should_exit = true;
+        stop = hrt_absolute_time();
+        publish_actuators();
+    }
+    PX4_INFO("Stop signal sent, time = %.2f",stop/1000000.0);
     PX4_INFO("Test finished, exiting.");
     thread_running = false;
     // fflush(stdout);
@@ -168,7 +210,9 @@ int iq_test_main(int argc, char *argv[]){
         }
 
         // default values
-        speed_min = 0.2;
+        // equivalent to typing:
+        // iq_test start 0.3 0.6 3 0 0.6 5 0 1
+        speed_min = 0.3;
         speed_max = 0.6;
         speed_n = 3;
         pulse_min = 0;
@@ -205,8 +249,13 @@ int iq_test_main(int argc, char *argv[]){
                 //  (argv) ? (char *const *)&uart_name1 : (char *const *)NULL);
                 (char *const *)NULL);
 
-        PX4_INFO("Speed = [%.2f,%.2f], %d steps",speed_min,speed_max,speed_n);
-        PX4_INFO("Pulse = [%.2f,%.2f], %d steps",pulse_min,pulse_max,pulse_n);
+        // param values to be loaded
+        float max_speed_value = 0.01f;
+        float max_pulse_volts_value = 0.01;
+        set_parameter("PROP_MAX_SPEED", &max_speed_value);
+        set_parameter("PROP_MAX_PULSE", &max_pulse_volts_value);
+        PX4_INFO("Speed = [%.2f,%.2f], %d steps",speed_min*max_speed_value,speed_max*max_speed_value,speed_n);
+        PX4_INFO("Pulse = [%.2f,%.2f], %d steps",pulse_min*max_pulse_volts_value,pulse_max*max_pulse_volts_value,pulse_n);
         PX4_INFO("Pulse test_phase = %.2f",test_phase);
         PX4_INFO("Step time = %.2fs",step_time);
         PX4_INFO("Test thread started");
@@ -237,3 +286,20 @@ static void usage(const char *reason) {
 	}
 	fprintf(stderr, "usage: iq_test {start|stop|status}\n\n");
 }
+
+
+// /**
+//  * Load single parameter
+//  */
+// int set_parameter(char *param_name, float *param_value){
+//     param_t param;
+//     param = param_find(param_name);
+//     if (param != PARAM_INVALID){
+//         param_get(param, param_value);
+//         PX4_INFO("%s set to %f", param_name, *param_value);
+//     } else {
+//         PX4_WARN("%s param invalid", param_name);
+//         return -1;
+//     }
+//     return 0;
+// }
