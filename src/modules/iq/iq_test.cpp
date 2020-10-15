@@ -212,6 +212,7 @@ int iq_test_main(int argc, char *argv[]){
         // default values
         // equivalent to typing:
         // iq_test start 0.3 0.6 3 0 0.6 5 0 1
+        // iq_test start 0.6 0.6 3 0 1 5 0 1
         speed_min = 0.3;
         speed_max = 0.6;
         speed_n = 3;
