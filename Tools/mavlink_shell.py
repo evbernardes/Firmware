@@ -118,7 +118,8 @@ def main():
             print('Using port {:}'.format(serial_list[0]))
             args.port = serial_list[0].device
 
-
+    print("port = {}".format(args.port))
+    print("baudrate = {}".format(args.baudrate))
     print("Connecting to MAVLINK...")
     mav_serialport = MavlinkSerialPort(args.port, args.baudrate, devnum=10)
 

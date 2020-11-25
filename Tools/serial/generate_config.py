@@ -28,11 +28,11 @@ serial_ports = {
     # index 0 means disabled
 
     # Generic
-#     "URT1": {
-#         "label": "UART 1",
-#         "index": 1,
-#         "default_baudrate": 57600,
-#         },
+    "WIFI": {
+        "label": "WIFI",
+        "index": 1,
+        "default_baudrate": 921600,
+        },
 #     "URT2": {
 #         "label": "UART 2",
 #         "index": 2,

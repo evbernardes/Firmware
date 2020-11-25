@@ -271,8 +271,8 @@ int iq_main(int argc, char *argv[]) {
     // Check input arguments
     // char *uart_name1;
     if (argc < 3) {
-        uart_name1 = (char *) ("/dev/ttyS3");
-        PX4_WARN("No serial port argument given, using default: /dev/ttyS3");
+        uart_name1 = (char *) ("/dev/ttyS1");
+        PX4_WARN("No serial port argument given, using default: /dev/ttyS1");
         // return 1;
     } else if (argc > 3) {
         PX4_ERR("Argument error, correct start usage: iq start [port]");

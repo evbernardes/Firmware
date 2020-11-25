@@ -59,3 +59,18 @@ px4_add_module(
     	#iqinetics.c
 	DEPENDS
 	)
+
+px4_add_module(
+	MODULE modules__actuator_controls_listen
+	MAIN actuator_controls_listen
+	STACK_MAIN 3000
+	SRCS
+	actuator_controls_listen.cpp
+    	#byte_queue.c
+    	#crc_helper.c
+    	#generic_interface.cpp
+    	#iq_helpers.cpp
+    	#packet_finder.c
+    	#iqinetics.c
+	DEPENDS
+	)

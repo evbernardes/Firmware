@@ -48,7 +48,7 @@ PARAM_DEFINE_FLOAT(PROP_MAX_PULSE, 3.0f);
  * @reboot_required true
  * @group IQinetics
  */
-PARAM_DEFINE_FLOAT(PROP_MAX_SPEED, 400.0f);
+PARAM_DEFINE_FLOAT(PROP_MAX_SPEED, 650.0f);
 
 /**
  * Propeller max yaw

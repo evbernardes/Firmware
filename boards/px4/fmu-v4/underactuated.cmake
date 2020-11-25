@@ -11,7 +11,7 @@ px4_add_board(
 	UAVCAN_INTERFACES 1
 
 	SERIAL_PORTS
-        WIFI:/dev/ttyS0
+		WIFI:/dev/ttyS0
 		GPS1:/dev/ttyS3
 		TEL1:/dev/ttyS1
 		TEL2:/dev/ttyS2
@@ -74,6 +74,7 @@ px4_add_board(
 		sih
 		vmount
 		vtol_att_control
+        iq
 
 	SYSTEMCMDS
 		bl_update

@@ -33,6 +33,7 @@
 // #include <dataman/dataman.h>
 #include <mathlib/mathlib.h>
 #include <matrix/math.hpp>
+#include <time.h>
 
 extern "C" __EXPORT int iq_test_main(int argc, char *argv[]);
 static volatile int daemon_task;       /**< Handle of daemon task / thread */
@@ -46,10 +47,6 @@ bool thread_running = false;
 bool thread_should_exit = false;
 bool thread_can_exit = false;
 
-// // param values to be loaded
-// float max_speed_value = 0.01f;
-// float max_pulse_volts_value = 0.01;
-
 float stop_signal_time = 2.0;
 float speed_min;
 float speed_max;
@@ -59,6 +56,9 @@ float pulse_max;
 int pulse_n;
 float test_phase;
 float step_time;
+int plot_start;
+int plot_step;
+char filename[40] = "test";
 // float q[4], acc[4], gyro[4];
 
 int sensor_combined_sub_fd;
@@ -90,9 +90,34 @@ int iq_test_thread_main(int argc, char *argv[])
     _actuators.control[2] = 0.0f;
     _actuators.control[3] = 0.0f;
     _actuators.control[4] = 1.0f;
+
+    // opening file
+    // param values to be loaded
+    float max_speed_value = 0.01f;
+    float max_pulse_volts_value = 0.01;
+    set_parameter("PROP_MAX_SPEED", &max_speed_value);
+    set_parameter("PROP_MAX_PULSE", &max_pulse_volts_value);
+    // time_t t = time(NULL);
+    // struct tm tm = *localtime(&t);
+    // PX4_INFO("now: %d-%02d-%02d %02d:%02d:%02d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+    // PX4_INFO(filename);
+    FILE *fptr;
+    char filepath[62];
+    sprintf(filepath,"/fs/microsd/test/%s.dat",filename);
+    fptr = fopen(filepath, "w");
+    fprintf(fptr, "%s", "- Swashplateless test \n");
+    fprintf(fptr, "- Speed = [%.2f,%.2f], %d steps",speed_min*max_speed_value,speed_max*max_speed_value,speed_n);
+    fprintf(fptr, "- Pulse = [%.2f,%.2f], %d steps",pulse_min*max_pulse_volts_value,pulse_max*max_pulse_volts_value,pulse_n);
+    fprintf(fptr, "- Pulse phase = %.2f",test_phase);
+    fprintf(fptr, "- Step time = %.2fs",step_time);
+    fprintf(fptr, "- Plot pause time: %f seconds \n", plot_step);
+
+    fprintf(fptr, "%s", "time \t rotation_speed \t pulse \t qa \t qx \t qy \t qz \n\n");
+
     int start, stop;
     int i = 0, j = -1;
     start = hrt_absolute_time();
+    plot_start = start;
     stop = hrt_absolute_time();
     PX4_INFO("Starting test...");
     // PX4_INFO("i = %d/%d, j = %d/%d, time = %.2f",i+1,speed_n,j+1,pulse_n,start/1000000.0);
@@ -101,17 +126,17 @@ int iq_test_thread_main(int argc, char *argv[])
     float pulse = 0.0;
 
     while(!thread_should_exit){
-        if(j > -1){ // motor stopped for first test
-            if(speed_n == 1 || speed_max == speed_min)
-                speed = speed_min;
-            else
-                speed = (speed_max - speed_min)*i/(speed_n-1) + speed_min;
+        // if(j > -1){ // motor stopped for first test
+        //     if(speed_n == 1 || speed_max == speed_min)
+        //         speed = speed_min;
+        //     else
+        //         speed = (speed_max - speed_min)*i/(speed_n-1) + speed_min;
 
-            if(pulse_n == 1 || pulse_max == pulse_min)
-                pulse = pulse_min;
-            else
-                pulse = (pulse_max - pulse_min)*j/(pulse_n-1) + pulse_min;
-        }
+        //     if(pulse_n == 1 || pulse_max == pulse_min)
+        //         pulse = pulse_min;
+        //     else
+        //         pulse = (pulse_max - pulse_min)*j/(pulse_n-1) + pulse_min;
+        // }
         _actuators.control[3] = speed;
         _actuators.control[0] = pulse*cos(test_phase);
         _actuators.control[1] = pulse*sin(test_phase);
@@ -125,6 +150,23 @@ int iq_test_thread_main(int argc, char *argv[])
             } else {
                 j++;
             }
+            // PX4_INFO("Speed: (%d/%d) \t Pulse: (%d/%d)",i+1,speed_n,j+1, pulse_n);
+            // speed = (speed_max - speed_min)*i/(speed_n-1) + speed_min;
+            // pulse = (pulse_max - pulse_min)*j/(pulse_n-1) + pulse_min;
+
+            if(j > -1){ // motor stopped for first test
+                if(speed_n == 1 || speed_max == speed_min)
+                    speed = speed_min;
+                else
+                    speed = (speed_max - speed_min)*i/(speed_n-1) + speed_min;
+
+                if(pulse_n == 1 || pulse_max == pulse_min)
+                    pulse = pulse_min;
+                else
+                    pulse = (pulse_max - pulse_min)*j/(pulse_n-1) + pulse_min;
+            }
+
+            PX4_INFO("Speed = %f (%d/%d) \t Pulse = %f (%d/%d)",speed*max_speed_value, i+1,speed_n,pulse*max_pulse_volts_value, j+1, pulse_n);
             // speed = (speed_max - speed_min)*i/(speed_n-1) + speed_min;
             // pulse = (pulse_max - pulse_min)*j/(pulse_n-1) + pulse_min;
             // _actuators.control[3] = speed;
@@ -139,17 +181,28 @@ int iq_test_thread_main(int argc, char *argv[])
         // handle errors
 		int poll_ret = px4_poll(fds, 2, 150);
         if (poll_ret > 0) {
-            struct vehicle_attitude_s vehicle_attitude_raw;
-            orb_copy(ORB_ID(vehicle_attitude), vehicle_attitude_sub_fd, &vehicle_attitude_raw);
-            // PX4_INFO("i = %d/%d, j = %d/%d, time = %.2f",i+1,speed_n,j+1,pulse_n,stop/1000000.0);
-            PX4_INFO("%d, %f, %f, %f, %f, %f, %f",
-                stop,
-                speed,
-                pulse,
-                vehicle_attitude_raw.q[0],
-                vehicle_attitude_raw.q[1],
-                vehicle_attitude_raw.q[2],
-                vehicle_attitude_raw.q[3]);
+            if ((stop - plot_start)/1000 > plot_step){
+                struct vehicle_attitude_s vehicle_attitude_raw;
+                orb_copy(ORB_ID(vehicle_attitude), vehicle_attitude_sub_fd, &vehicle_attitude_raw);
+                // PX4_DEBUG("%d, %f, %f, %f, %f, %f, %f",
+                //     stop,
+                //     speed,
+                //     pulse,
+                //     vehicle_attitude_raw.q[0],
+                //     vehicle_attitude_raw.q[1],
+                //     vehicle_attitude_raw.q[2],
+                //     vehicle_attitude_raw.q[3]);
+
+                fprintf(fptr, "%d, %f, %f, %f, %f, %f, %f\n",
+                    stop,
+                    speed*max_speed_value,
+                    pulse*max_pulse_volts_value,
+                    vehicle_attitude_raw.q[0],
+                    vehicle_attitude_raw.q[1],
+                    vehicle_attitude_raw.q[2],
+                    vehicle_attitude_raw.q[3]);
+                plot_start = hrt_absolute_time();
+            }
         }
 
     }
@@ -170,6 +223,7 @@ int iq_test_thread_main(int argc, char *argv[])
     }
     PX4_INFO("Stop signal sent, time = %.2f",stop/1000000.0);
     PX4_INFO("Test finished, exiting.");
+    fclose(fptr);
     thread_running = false;
     // fflush(stdout);
 	// return 0;
@@ -211,19 +265,30 @@ int iq_test_main(int argc, char *argv[]){
 
         // default values
         // equivalent to typing:
-        // iq_test start 0.3 0.6 3 0 0.6 5 0 1
-        // iq_test start 0.6 0.6 3 0 1 5 0 1
+        // iq_test start 0.0 0.0 1 0.1 0.1 2 0 0.5 0
+        // iq_test start 0.1 0.1 1 0.1 0.1 2 5 0.5 5
+        // iq_test start 0.4 0.4 1 0 0.8 3 115 1 20
+        // iq_test start 0.2 0.4 1 0 0.8 3 115 1 20
+
+        // iq_test start 0.4 0.4 1 0 0.8 6 115 4.5 20 2020_11_17/vel_04_pulse_0_08
+        // iq_test start 0.5 0.5 1 0 0.8 6 115 4.5 20 2020_11_17/vel_05_pulse_0_08
+        // iq_test start 0.6 0.6 1 0 0.8 6 115 4.5 20 2020_11_17/vel_06_pulse_0_08
+        // iq_test start 0.7 0.7 1 0 0.8 6 115 4.5 20 2020_11_17/vel_07_pulse_0_08
+        // iq_test start 0.8 0.8 1 0 0.8 6 115 4.5 20 2020_11_17/vel_08_pulse_0_08
         speed_min = 0.3;
-        speed_max = 0.6;
-        speed_n = 3;
+        speed_max = speed_min;
+        speed_n = 1;
         pulse_min = 0;
-        pulse_max = 0.6;
-        pulse_n = 5;
+        pulse_max = 0.8;
+        pulse_n = 12;
         test_phase = 0;
         step_time = 1.0;
+        plot_step = 20;
 
         switch (argc)
         {
+        case 12: strcpy(filename,argv[11]);
+        case 11: plot_step = atoi(argv[10]);
         case 10: step_time = atof(argv[9]);
         case 9: test_phase = atof(argv[8]);
         case 8: pulse_n = atoi(argv[7]);
@@ -257,7 +322,7 @@ int iq_test_main(int argc, char *argv[]){
         set_parameter("PROP_MAX_PULSE", &max_pulse_volts_value);
         PX4_INFO("Speed = [%.2f,%.2f], %d steps",speed_min*max_speed_value,speed_max*max_speed_value,speed_n);
         PX4_INFO("Pulse = [%.2f,%.2f], %d steps",pulse_min*max_pulse_volts_value,pulse_max*max_pulse_volts_value,pulse_n);
-        PX4_INFO("Pulse test_phase = %.2f",test_phase);
+        PX4_INFO("Pulse phase = %.2f",test_phase);
         PX4_INFO("Step time = %.2fs",step_time);
         PX4_INFO("Test thread started");
         return 0;
